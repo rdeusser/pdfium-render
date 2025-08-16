@@ -81,6 +81,7 @@ pub(crate) struct PdfiumRenderWasmState {
     file_access_callback_function_table_entry: usize,
     file_write_callback_function_table_entry: usize,
     state: HashMap<String, JsValue>,
+    form_handle_pointers: HashMap<usize, usize>, // Maps FPDF_FORMHANDLE to form_info_ptr.
 }
 
 impl PdfiumRenderWasmState {
@@ -1010,6 +1011,7 @@ impl Default for PdfiumRenderWasmState {
             file_access_callback_function_table_entry: 0, // These sentinel values will be replaced with actual values...
             file_write_callback_function_table_entry: 0, // ... during the first call to PdfiumRenderWasmState::bind_to_pdfium().
             state: HashMap::new(),
+            form_handle_pointers: HashMap::new(),
         }
     }
 }
@@ -8780,11 +8782,11 @@ impl PdfiumLibraryBindings for WasmPdfiumBindings {
     ) -> FPDF_FORMHANDLE {
         log::debug!("pdfium-render::PdfiumLibraryBindings::FPDFDOC_InitFormFillEnvironment()");
 
-        let state = PdfiumRenderWasmState::lock();
+        let mut state = PdfiumRenderWasmState::lock_mut();
 
         let form_info_ptr = state.copy_struct_to_pdfium_mut(form_info);
 
-        state
+        let form_handle = state
             .call(
                 "FPDFDOC_InitFormFillEnvironment",
                 JsFunctionArgumentType::Pointer,
@@ -8798,24 +8800,33 @@ impl PdfiumLibraryBindings for WasmPdfiumBindings {
                 ))),
             )
             .as_f64()
-            .unwrap() as usize as FPDF_FORMHANDLE
+            .unwrap() as usize as FPDF_FORMHANDLE;
 
-        // Returning here without calling state.free(form_info_ptr) leaks memory, but Pdfium
-        // seems to expect the struct pointer to remain valid so long as the form handle is valid.
-        // TODO: AJRC - 28/2/12 - we could use PdfiumRenderWasmState() to track which form handles
-        // are currently in use and drop their struct ptrs when the forms are dropped
+        // Track the form_info_ptr so we can free it when the form is closed.
+        if form_handle != 0 {
+            state.form_handle_pointers.insert(form_handle as usize, form_info_ptr);
+        }
+
+        form_handle
     }
 
     #[allow(non_snake_case)]
     fn FPDFDOC_ExitFormFillEnvironment(&self, form: FPDF_FORMHANDLE) {
         log::debug!("pdfium-render::PdfiumLibraryBindings::FPDFDOC_ExitFormFillEnvironment()");
 
-        PdfiumRenderWasmState::lock().call(
+        let mut state = PdfiumRenderWasmState::lock_mut();
+
+        state.call(
             "FPDFDOC_ExitFormFillEnvironment",
             JsFunctionArgumentType::Void,
             Some(vec![JsFunctionArgumentType::Pointer]),
             Some(&JsValue::from(Array::of1(&Self::js_value_from_form(form)))),
         );
+
+        // Free the form_info_ptr that was allocated in FPDFDOC_InitFormFillEnvironment.
+        if let Some(form_info_ptr) = state.form_handle_pointers.remove(&(form as usize)) {
+            state.free(form_info_ptr);
+        }
     }
 
     #[allow(non_snake_case)]
@@ -10126,9 +10137,11 @@ impl PdfiumLibraryBindings for WasmPdfiumBindings {
 
     #[allow(non_snake_case)]
     fn FPDF_AddInstalledFont(&self, mapper: *mut c_void, face: &str, charset: c_int) {
-        // TODO: AJRC - 7-Sep-2024 - this almost certainly won't work on WASM because
-        // mapper is (according to the documentation) meant to be a pointer to a Foxit font mapper,
-        // which doesn't exist on WASM.
+        // NOTE: This function has limited functionality on WASM. The `mapper` parameter
+        // is intended to be a pointer to a platform-specific font mapper (e.g., Foxit font mapper),
+        // which is not available in the WASM environment. While we forward the call to Pdfium,
+        // font installation may not work as expected without a proper font mapper implementation.
+        // Consider using embedded fonts or web fonts as alternatives for WASM deployments.
 
         log::debug!("pdfium-render::PdfiumLibraryBindings::FPDF_AddInstalledFont()");
 
