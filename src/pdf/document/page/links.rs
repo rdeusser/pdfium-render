@@ -1,7 +1,7 @@
 //! Defines the [PdfPageLinks] struct, exposing functionality related to the
 //! links contained within a single `PdfPage`.
 
-use crate::bindgen::{FPDF_DOCUMENT, FPDF_PAGE};
+use crate::bindgen::{FPDF_DOCUMENT, FPDF_LINK, FPDF_PAGE};
 use crate::bindings::PdfiumLibraryBindings;
 use crate::error::PdfiumError;
 use crate::pdf::link::PdfLink;
@@ -124,7 +124,7 @@ impl<'a> PdfPageLinks<'a> {
     pub fn get(&'a self, index: PdfPageLinkIndex) -> Result<PdfLink<'a>, PdfiumError> {
         let mut start_pos = index as c_int;
 
-        let mut handle = null_mut();
+        let mut handle: FPDF_LINK = null_mut();
 
         if self.bindings.is_true(self.bindings.FPDFLink_Enumerate(
             self.page_handle,

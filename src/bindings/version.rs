@@ -91,5 +91,8 @@ impl PdfiumApiVersion {
 
         #[cfg(feature = "pdfium_5961")]
         return PdfiumApiVersion::V5961;
+
+        // Default to latest if no specific version is selected.
+        PdfiumApiVersion::V7215
     }
 }

@@ -71,6 +71,32 @@ mod bindgen {
     #[cfg(feature = "pdfium_5961")]
     include!("bindgen/pdfium_5961.rs");
 
+    // Default fallback if no version is selected - include the latest.
+    #[cfg(not(any(
+        feature = "pdfium_future",
+        feature = "pdfium_7215",
+        feature = "pdfium_7123",
+        feature = "pdfium_6996",
+        feature = "pdfium_6721",
+        feature = "pdfium_6666",
+        feature = "pdfium_6611",
+        feature = "pdfium_6569",
+        feature = "pdfium_6555",
+        feature = "pdfium_6490",
+        feature = "pdfium_6406",
+        feature = "pdfium_6337",
+        feature = "pdfium_6295",
+        feature = "pdfium_6259",
+        feature = "pdfium_6164",
+        feature = "pdfium_6124",
+        feature = "pdfium_6110",
+        feature = "pdfium_6084",
+        feature = "pdfium_6043",
+        feature = "pdfium_6015",
+        feature = "pdfium_5961"
+    )))]
+    include!("bindgen/pdfium_7215.rs");
+
     pub(crate) type size_t = usize;
 }
 
